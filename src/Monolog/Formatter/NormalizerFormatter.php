@@ -39,7 +39,7 @@ class NormalizerFormatter implements FormatterInterface
     /**
      * {@inheritdoc}
      */
-    public function format(array $record)
+    public function format(array $record): array
     {
         return $this->normalize($record);
     }
@@ -47,7 +47,7 @@ class NormalizerFormatter implements FormatterInterface
     /**
      * {@inheritdoc}
      */
-    public function formatBatch(array $records)
+    public function formatBatch(array $records): array
     {
         foreach ($records as $key => $record) {
             $records[$key] = $this->format($record);
@@ -56,8 +56,16 @@ class NormalizerFormatter implements FormatterInterface
         return $records;
     }
 
-    protected function normalize($data)
+    /**
+     * @param mixed $data
+     * @return int|bool|string|null|array
+     */
+    protected function normalize($data, int $depth = 0)
     {
+        if ($depth > 9) {
+            return 'Over 9 levels deep, aborting normalization';
+        }
+
         if (null === $data || is_scalar($data)) {
             if (is_float($data)) {
                 if (is_infinite($data)) {
@@ -71,16 +79,16 @@ class NormalizerFormatter implements FormatterInterface
             return $data;
         }
 
-        if (is_array($data) || $data instanceof \Traversable) {
+        if (is_array($data)) {
             $normalized = [];
 
             $count = 1;
             foreach ($data as $key => $value) {
                 if ($count++ >= 1000) {
-                    $normalized['...'] = 'Over 1000 items, aborting normalization';
+                    $normalized['...'] = 'Over 1000 items ('.count($data).' total), aborting normalization';
                     break;
                 }
-                $normalized[$key] = $this->normalize($value);
+                $normalized[$key] = $this->normalize($value, $depth + 1);
             }
 
             return $normalized;
@@ -92,7 +100,7 @@ class NormalizerFormatter implements FormatterInterface
 
         if (is_object($data)) {
             if ($data instanceof Throwable) {
-                return $this->normalizeException($data);
+                return $this->normalizeException($data, $depth);
             }
 
             if ($data instanceof \JsonSerializable) {
@@ -119,7 +127,10 @@ class NormalizerFormatter implements FormatterInterface
         return '[unknown('.gettype($data).')]';
     }
 
-    protected function normalizeException(Throwable $e)
+    /**
+     * @return array
+     */
+    protected function normalizeException(Throwable $e, int $depth = 0)
     {
         $data = [
             'class' => get_class($e),
@@ -127,6 +138,20 @@ class NormalizerFormatter implements FormatterInterface
             'code' => $e->getCode(),
             'file' => $e->getFile().':'.$e->getLine(),
         ];
+
+        if ($e instanceof \SoapFault) {
+            if (isset($e->faultcode)) {
+                $data['faultcode'] = $e->faultcode;
+            }
+
+            if (isset($e->faultactor)) {
+                $data['faultactor'] = $e->faultactor;
+            }
+
+            if (isset($e->detail)) {
+                $data['detail'] = $e->detail;
+            }
+        }
 
         $trace = $e->getTrace();
         foreach ($trace as $frame) {
@@ -137,12 +162,12 @@ class NormalizerFormatter implements FormatterInterface
                 $data['trace'][] = $frame['function'];
             } else {
                 // We should again normalize the frames, because it might contain invalid items
-                $data['trace'][] = $this->toJson($this->normalize($frame), true);
+                $data['trace'][] = $this->toJson($this->normalize($frame, $depth + 1), true);
             }
         }
 
         if ($previous = $e->getPrevious()) {
-            $data['previous'] = $this->normalizeException($previous);
+            $data['previous'] = $this->normalizeException($previous, $depth + 1);
         }
 
         return $data;
@@ -152,11 +177,10 @@ class NormalizerFormatter implements FormatterInterface
      * Return the JSON representation of a value
      *
      * @param  mixed             $data
-     * @param  bool              $ignoreErrors
      * @throws \RuntimeException if encoding fails and errors are not ignored
      * @return string|bool
      */
-    protected function toJson($data, $ignoreErrors = false)
+    protected function toJson($data, bool $ignoreErrors = false)
     {
         // suppress json_encode errors since it's twitchy with some inputs
         if ($ignoreErrors) {
@@ -178,7 +202,7 @@ class NormalizerFormatter implements FormatterInterface
      */
     private function jsonEncode($data)
     {
-        return json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
     }
 
     /**
@@ -186,7 +210,7 @@ class NormalizerFormatter implements FormatterInterface
      *
      * If the failure is due to invalid string encoding, try to clean the
      * input and encode again. If the second encoding attempt fails, the
-     * inital error is not encoding related or the input can't be cleaned then
+     * initial error is not encoding related or the input can't be cleaned then
      * raise a descriptive exception.
      *
      * @param  int               $code return code of json_last_error function
@@ -282,7 +306,9 @@ class NormalizerFormatter implements FormatterInterface
 
     protected function formatDate(\DateTimeInterface $date)
     {
-        if ($date instanceof DateTimeImmutable) {
+        // in case the date format isn't custom then we defer to the custom DateTimeImmutable
+        // formatting logic, which will pick the right format based on whether useMicroseconds is on
+        if ($this->dateFormat === self::SIMPLE_DATE && $date instanceof DateTimeImmutable) {
             return (string) $date;
         }
 

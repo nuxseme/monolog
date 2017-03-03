@@ -45,8 +45,9 @@ $log->error('Bar');
 
 - [Usage Instructions](doc/01-usage.md)
 - [Handlers, Formatters and Processors](doc/02-handlers-formatters-processors.md)
-- [Utility classes](doc/03-utilities.md)
+- [Utility Classes](doc/03-utilities.md)
 - [Extending Monolog](doc/04-extending.md)
+- [Log Record Structure](doc/message-structure.md)
 
 ## Third Party Packages
 
@@ -58,7 +59,7 @@ can also add your own there if you publish one.
 
 ### Requirements
 
-- Monolog works with PHP 5.3 or above, and is also tested to work with HHVM.
+- Monolog works with PHP 7.0 or above, use Monolog `^1.0` for PHP 5.3+ support.
 
 ### Submitting bugs and feature requests
 
@@ -80,6 +81,8 @@ Bugs and feature request are tracked on [GitHub](https://github.com/Seldaek/mono
 - [Nette Framework](http://nette.org/en/) can be used with Monolog via [Kdyby/Monolog](https://github.com/Kdyby/Monolog) extension.
 - [Proton Micro Framework](https://github.com/alexbilbie/Proton) comes out of the box with Monolog.
 - [FuelPHP](http://fuelphp.com/) come out of the box with Monolog.
+- [Equip Framework](https://github.com/equip/framework) comes out of the box with Monolog.
+- [Yii 2](http://www.yiiframework.com/) is usable with Monolog via the [yii2-monolog](https://github.com/merorafael/yii2-monolog) plugin.
 
 ### Author
 
